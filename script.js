@@ -1,20 +1,33 @@
 /**
- * Minecraft 太阳光与影子科学实验
- * 核心逻辑：太阳高度角计算、影子渲染、时间轴交互
+ * Minecraft 太阳光与影子科学实验 — 2.5D 等角视角引擎
+ * 核心特性：
+ *   - 等角投影（Isometric）地面网格，精灵图方块堆叠
+ *   - 360° 影子方向与长度实时计算
+ *   - 太阳→标杆光线指示虚线
+ *   - 季节切换、24小时时间轴、知识面板
  */
 
 // ===== 配置与常量 =====
 const CONFIG = {
     canvasWidth: 960,
-    canvasHeight: 540,
-    groundY: 400,
-    houseX: 420,
-    houseWidth: 120,
-    houseHeight: 100,
-    poleX: 580,
-    poleHeight: 80,
-    poleWidth: 8,
-    latitude: 40, // 北纬40度（北京附近）
+    canvasHeight: 600,
+
+    // 2.5D 等角投影参数
+    isoCenterX: 480,
+    isoBaseY: 320,       // 地面层(worldY=0)顶面的中心Y
+    isoTileW: 72,        // 顶面水平宽度（像素）
+    isoTileH: 36,        // 顶面垂直半高（像素），保持2:1比例
+    isoBlockDepth: 36,   // 方块侧面高度（像素），与isoTileH相同形成正方体
+    isoGridRadius: 3,    // 地面网格半径（3=7x7网格）
+    isoPoleHeight: 6,    // 标杆高度（方块数）
+    shadowScale: 0.45,   // 影子长度世界坐标缩放因子
+
+    // 天空参数
+    skyCenterY: 130,
+    skyRadius: 260,
+
+    // 地理参数
+    latitude: 40,
     seasons: {
         winter: { name: '冬至', declination: -23.5, noonAngle: 26.5, color: '#88CCFF' },
         equinox: { name: '春分/秋分', declination: 0, noonAngle: 50, color: '#87CEEB' },
@@ -24,13 +37,13 @@ const CONFIG = {
 
 // ===== 状态管理 =====
 let state = {
-    hour: 12,        // 当前时间 (0-24)
-    season: 'equinox', // 当前季节
+    hour: 12,
+    season: 'equinox',
     isPlaying: false,
-    playSpeed: 1,    // 播放速度倍率
+    playSpeed: 1,
     animFrame: null,
     lastTimestamp: 0,
-    images: {}       // 预加载的图片缓存
+    images: {}
 };
 
 // ===== 知识点数据 =====
@@ -89,68 +102,40 @@ function preloadImages() {
     return new Promise((resolve) => {
         for (const [key, src] of Object.entries(imageSources)) {
             const img = new Image();
-            img.onload = () => {
-                state.images[key] = img;
-                loaded++;
-                if (loaded >= total) resolve();
-            };
-            img.onerror = () => {
-                loaded++;
-                if (loaded >= total) resolve();
-            };
+            img.onload = () => { state.images[key] = img; loaded++; if (loaded >= total) resolve(); };
+            img.onerror = () => { loaded++; if (loaded >= total) resolve(); };
             img.src = src;
         }
-        // 超时保护
         setTimeout(() => resolve(), 5000);
     });
 }
 
 // ===== 数学计算 =====
 
-/**
- * 计算太阳高度角（度）
- * @param {number} hour - 当前小时 (0-24)
- * @param {number} noonAngle - 正午太阳高度角
- */
 function calcSunAltitude(hour, noonAngle) {
-    // 简化模型：太阳6点日出，18点日落
-    if (hour < 6 || hour > 18) return -1; // 太阳在地平线以下
-    const t = (hour - 12) * 15; // 距离正午的角度（度）
+    if (hour < 6 || hour > 18) return -1;
+    const t = (hour - 12) * 15;
     const rad = t * Math.PI / 180;
     const altitude = noonAngle * Math.cos(rad);
     return Math.max(0, altitude);
 }
 
-/**
- * 计算太阳方位角（度）
- * 正南为0，东为-90，西为90
- */
 function calcSunAzimuth(hour) {
     if (hour < 6 || hour > 18) return null;
     return (hour - 12) * 15;
 }
 
-/**
- * 计算影子长度（像素）
- */
 function calcShadowLength(altitude, poleHeight) {
     if (altitude <= 0) return null;
     const rad = altitude * Math.PI / 180;
     return poleHeight / Math.tan(rad);
 }
 
-/**
- * 计算影子方向（度）
- * 正北为0，西为90，东为-90
- */
 function calcShadowDirection(azimuth) {
     if (azimuth === null) return null;
     return -azimuth;
 }
 
-/**
- * 方向文字描述
- */
 function getDirectionText(direction) {
     if (direction === null) return '无';
     const d = direction;
@@ -166,17 +151,27 @@ function getDirectionText(direction) {
     return '北';
 }
 
-/**
- * 获取天空颜色
- */
 function getSkyColor(hour) {
-    if (hour >= 7 && hour < 17) {
-        return { top: '#4a90d9', bottom: '#87CEEB', phase: 'day' };
-    } else if ((hour >= 5 && hour < 7) || (hour >= 17 && hour < 19)) {
-        return { top: '#6b3a5c', bottom: '#FF8C42', phase: 'sunset' };
-    } else {
-        return { top: '#0a0a1a', bottom: '#1a1a2e', phase: 'night' };
-    }
+    if (hour >= 7 && hour < 17) return { top: '#4a90d9', bottom: '#87CEEB', phase: 'day' };
+    else if ((hour >= 5 && hour < 7) || (hour >= 17 && hour < 19)) return { top: '#6b3a5c', bottom: '#FF8C42', phase: 'sunset' };
+    else return { top: '#0a0a1a', bottom: '#1a1a2e', phase: 'night' };
+}
+
+// ===== 2.5D 等角投影核心 =====
+
+/**
+ * 世界坐标 → 屏幕坐标
+ * worldX: 东(+) / 西(-)
+ * worldY: 上(+) / 下(-)
+ * worldZ: 南(+) / 北(-)
+ */
+function isoToScreen(worldX, worldY, worldZ) {
+    const tw = CONFIG.isoTileW;
+    const th = CONFIG.isoTileH;
+    return {
+        x: CONFIG.isoCenterX + (worldX - worldZ) * tw / 2,
+        y: CONFIG.isoBaseY + (worldX + worldZ) * th / 2 - worldY * th
+    };
 }
 
 // ===== Canvas 渲染 =====
@@ -189,32 +184,21 @@ function drawPixelRect(x, y, w, h, color) {
     ctx.fillRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h));
 }
 
-function drawBlockBorder(x, y, w, h, lightColor, darkColor) {
-    // 上边和左边亮色
-    ctx.fillStyle = lightColor;
-    ctx.fillRect(x, y, w, 3);
-    ctx.fillRect(x, y, 3, h);
-    // 下边和右边暗色
-    ctx.fillStyle = darkColor;
-    ctx.fillRect(x, y + h - 3, w, 3);
-    ctx.fillRect(x + w - 3, y, 3, h);
-}
-
+// --- 天空 ---
 function drawSky(hour) {
     const sky = getSkyColor(hour);
-    const grad = ctx.createLinearGradient(0, 0, 0, CONFIG.groundY);
+    const grad = ctx.createLinearGradient(0, 0, 0, CONFIG.isoBaseY - 60);
     grad.addColorStop(0, sky.top);
     grad.addColorStop(1, sky.bottom);
     ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, CONFIG.canvasWidth, CONFIG.groundY);
+    ctx.fillRect(0, 0, CONFIG.canvasWidth, CONFIG.isoBaseY - 60);
 
-    // 绘制星星（夜晚）
     if (sky.phase === 'night' || (sky.phase === 'sunset' && (hour < 6 || hour > 18))) {
         ctx.fillStyle = '#ffffff';
         const starSeed = Math.floor(hour * 100);
-        for (let i = 0; i < 60; i++) {
+        for (let i = 0; i < 80; i++) {
             const sx = ((starSeed + i * 137) % 1000) / 1000 * CONFIG.canvasWidth;
-            const sy = ((starSeed + i * 293) % 1000) / 1000 * (CONFIG.groundY * 0.7);
+            const sy = ((starSeed + i * 293) % 1000) / 1000 * (CONFIG.skyCenterY * 0.8);
             const size = ((starSeed + i * 53) % 3) + 1;
             ctx.globalAlpha = 0.3 + ((starSeed + i) % 100) / 200;
             ctx.fillRect(sx, sy, size, size);
@@ -222,225 +206,37 @@ function drawSky(hour) {
         ctx.globalAlpha = 1;
     }
 
-    // 云朵
     if (sky.phase === 'day' || sky.phase === 'sunset') {
         drawClouds(hour);
     }
 }
 
 function drawClouds(hour) {
-    ctx.fillStyle = 'rgba(255,255,255,0.7)';
-    const cloudOffset = (hour * 30) % CONFIG.canvasWidth;
+    ctx.fillStyle = 'rgba(255,255,255,0.65)';
+    const cloudOffset = (hour * 40) % CONFIG.canvasWidth;
     const clouds = [
-        { x: 100, y: 60, w: 80, h: 24 },
-        { x: 350, y: 90, w: 100, h: 28 },
-        { x: 650, y: 50, w: 90, h: 26 },
-        { x: 850, y: 110, w: 70, h: 22 }
+        { x: 120, y: 50, w: 90, h: 26 },
+        { x: 400, y: 80, w: 110, h: 30 },
+        { x: 720, y: 45, w: 100, h: 28 },
+        { x: 900, y: 100, w: 80, h: 24 }
     ];
     clouds.forEach(c => {
         const cx = ((c.x + cloudOffset) % (CONFIG.canvasWidth + 200)) - 100;
-        // 像素风云朵
         ctx.fillRect(cx, c.y, c.w, c.h);
-        ctx.fillRect(cx + 8, c.y - 8, c.w - 16, 8);
-        ctx.fillRect(cx + 16, c.y - 14, c.w - 32, 6);
-        ctx.fillStyle = 'rgba(200,200,200,0.5)';
+        ctx.fillRect(cx + 10, c.y - 8, c.w - 20, 8);
+        ctx.fillRect(cx + 18, c.y - 14, c.w - 36, 6);
+        ctx.fillStyle = 'rgba(200,200,200,0.45)';
         ctx.fillRect(cx + 4, c.y + c.h - 4, c.w - 8, 4);
-        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.fillStyle = 'rgba(255,255,255,0.65)';
     });
 }
 
-function drawGround() {
-    const gy = CONFIG.groundY;
-    const gh = CONFIG.canvasHeight - gy;
-
-    // 草地表层
-    if (state.images.grassTop) {
-        const pattern = ctx.createPattern(state.images.grassTop, 'repeat');
-        ctx.fillStyle = pattern;
-        ctx.fillRect(0, gy, CONFIG.canvasWidth, 20);
-    } else {
-        drawPixelRect(0, gy, CONFIG.canvasWidth, 20, '#567D46');
-    }
-
-    // 泥土层
-    if (state.images.dirt) {
-        const pattern = ctx.createPattern(state.images.dirt, 'repeat');
-        ctx.fillStyle = pattern;
-        ctx.fillRect(0, gy + 20, CONFIG.canvasWidth, gh - 20);
-    } else {
-        drawPixelRect(0, gy + 20, CONFIG.canvasWidth, gh - 20, '#8B6914');
-    }
-
-    // 草地边缘高光
-    ctx.fillStyle = 'rgba(100,180,80,0.3)';
-    ctx.fillRect(0, gy, CONFIG.canvasWidth, 3);
-}
-
-function drawHouse() {
-    const x = CONFIG.houseX;
-    const y = CONFIG.groundY - CONFIG.houseHeight;
-    const w = CONFIG.houseWidth;
-    const h = CONFIG.houseHeight;
-
-    // 房子主体（砖块）
-    if (state.images.brick) {
-        const pattern = ctx.createPattern(state.images.brick, 'repeat');
-        ctx.fillStyle = pattern;
-        ctx.fillRect(x, y, w, h);
-    } else {
-        drawPixelRect(x, y, w, h, '#a05040');
-    }
-    drawBlockBorder(x, y, w, h, '#c07060', '#603020');
-
-    // 屋顶（三角形，深色木板）
-    ctx.fillStyle = state.images.oakPlanks ? '#5a4a30' : '#5a4a30';
-    ctx.beginPath();
-    ctx.moveTo(x - 10, y);
-    ctx.lineTo(x + w / 2, y - 40);
-    ctx.lineTo(x + w + 10, y);
-    ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = '#3a2a10';
-    ctx.lineWidth = 3;
-    ctx.stroke();
-
-    // 门
-    const doorW = 28;
-    const doorH = 50;
-    const doorX = x + (w - doorW) / 2;
-    const doorY = CONFIG.groundY - doorH;
-    if (state.images.oakPlanks) {
-        const pattern = ctx.createPattern(state.images.oakPlanks, 'repeat');
-        ctx.fillStyle = pattern;
-        ctx.fillRect(doorX, doorY, doorW, doorH);
-    } else {
-        drawPixelRect(doorX, doorY, doorW, doorH, '#A07850');
-    }
-    drawBlockBorder(doorX, doorY, doorW, doorH, '#c09870', '#705030');
-    // 门把手
-    ctx.fillStyle = '#F4D142';
-    ctx.fillRect(doorX + doorW - 8, doorY + doorH / 2, 4, 4);
-
-    // 窗户
-    const winSize = 24;
-    const winY = y + 20;
-    // 左窗
-    drawWindow(x + 12, winY, winSize);
-    // 右窗
-    drawWindow(x + w - 12 - winSize, winY, winSize);
-}
-
-function drawWindow(wx, wy, size) {
-    // 窗框
-    ctx.fillStyle = '#8B6914';
-    ctx.fillRect(wx - 3, wy - 3, size + 6, size + 6);
-    // 玻璃
-    if (state.images.glass) {
-        const pattern = ctx.createPattern(state.images.glass, 'repeat');
-        ctx.fillStyle = pattern;
-        ctx.fillRect(wx, wy, size, size);
-    } else {
-        ctx.fillStyle = '#88CCFF';
-        ctx.fillRect(wx, wy, size, size);
-    }
-    // 窗格
-    ctx.fillStyle = '#8B6914';
-    ctx.fillRect(wx + size / 2 - 1, wy, 2, size);
-    ctx.fillRect(wx, wy + size / 2 - 1, size, 2);
-    // 反光
-    ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    ctx.fillRect(wx + 2, wy + 2, size / 2 - 2, size / 2 - 2);
-}
-
-function drawPole() {
-    const px = CONFIG.poleX;
-    const py = CONFIG.groundY - CONFIG.poleHeight;
-    const pw = CONFIG.poleWidth;
-    const ph = CONFIG.poleHeight;
-
-    // 标杆主体
-    if (state.images.pole) {
-        const pattern = ctx.createPattern(state.images.pole, 'repeat');
-        ctx.fillStyle = pattern;
-        ctx.fillRect(px, py, pw, ph);
-    } else {
-        drawPixelRect(px, py, pw, ph, '#e8e8e8');
-        // 条纹
-        for (let i = 0; i < ph; i += 10) {
-            ctx.fillStyle = i % 20 === 0 ? '#cc3333' : '#e8e8e8';
-            ctx.fillRect(px, py + i, pw, 10);
-        }
-    }
-    drawBlockBorder(px, py, pw, ph, '#ffffff', '#999999');
-
-    // 标杆顶部
-    ctx.fillStyle = '#cc3333';
-    ctx.fillRect(px - 2, py - 4, pw + 4, 4);
-}
-
-function drawShadow(hour) {
-    const seasonData = CONFIG.seasons[state.season];
-    const altitude = calcSunAltitude(hour, seasonData.noonAngle);
-
-    if (altitude <= 0) return;
-
-    const shadowLen = calcShadowLength(altitude, CONFIG.poleHeight);
-    const azimuth = calcSunAzimuth(hour);
-    const direction = calcShadowDirection(azimuth);
-    const dirRad = direction * Math.PI / 180;
-
-    const px = CONFIG.poleX + CONFIG.poleWidth / 2;
-    const py = CONFIG.groundY;
-
-    // 影子的两个端点（假设影子宽度与标杆相同）
-    const shadowW = CONFIG.poleWidth * (1 + shadowLen / 200);
-    const endX = px + Math.sin(dirRad) * shadowLen;
-    const endY = py + Math.cos(dirRad) * shadowLen * 0.1; // 略微的透视效果
-
-    ctx.save();
-    ctx.globalAlpha = 0.4;
-    ctx.fillStyle = '#000000';
-
-    // 绘制梯形影子
-    ctx.beginPath();
-    ctx.moveTo(px - shadowW / 2, py + 2);
-    ctx.lineTo(px + shadowW / 2, py + 2);
-    ctx.lineTo(endX + shadowW / 4, endY + 2);
-    ctx.lineTo(endX - shadowW / 4, endY + 2);
-    ctx.closePath();
-    ctx.fill();
-
-    // 影子边缘模糊效果（像素风用简单的透明度层次）
-    ctx.globalAlpha = 0.15;
-    ctx.beginPath();
-    ctx.moveTo(px - shadowW / 2 - 2, py + 2);
-    ctx.lineTo(px + shadowW / 2 + 2, py + 2);
-    ctx.lineTo(endX + shadowW / 4 + 4, endY + 2);
-    ctx.lineTo(endX - shadowW / 4 - 4, endY + 2);
-    ctx.closePath();
-    ctx.fill();
-
-    ctx.restore();
-
-    // 绘制影子长度标尺线
-    ctx.save();
-    ctx.strokeStyle = 'rgba(244,209,66,0.6)';
-    ctx.lineWidth = 1;
-    ctx.setLineDash([4, 4]);
-    ctx.beginPath();
-    ctx.moveTo(px, py + 8);
-    ctx.lineTo(endX, endY + 8);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.restore();
-}
-
+// --- 太阳 / 月亮 ---
 function drawSun(hour) {
     const seasonData = CONFIG.seasons[state.season];
     const altitude = calcSunAltitude(hour, seasonData.noonAngle);
 
     if (altitude <= 0) {
-        // 画月亮
         drawMoon(hour);
         return;
     }
@@ -448,25 +244,24 @@ function drawSun(hour) {
     const azimuth = calcSunAzimuth(hour);
     const azRad = azimuth * Math.PI / 180;
 
-    // 太阳轨迹：弧形，中心在画布上方
     const centerX = CONFIG.canvasWidth / 2;
-    const centerY = CONFIG.groundY + 100;
-    const radius = 350;
+    const centerY = CONFIG.skyCenterY;
+    const radius = CONFIG.skyRadius;
 
     const sunX = centerX + Math.sin(azRad) * radius;
-    const sunY = centerY - Math.cos(azRad) * radius;
+    const sunY = centerY - Math.cos(azRad) * radius * 0.35 - altitude * 1.2;
 
     // 太阳光晕
-    const glowSize = 60 + Math.sin(Date.now() / 500) * 5;
+    const glowSize = 65 + Math.sin(Date.now() / 500) * 4;
     const glow = ctx.createRadialGradient(sunX, sunY, 10, sunX, sunY, glowSize);
-    glow.addColorStop(0, 'rgba(255,220,100,0.8)');
-    glow.addColorStop(0.5, 'rgba(255,180,50,0.3)');
-    glow.addColorStop(1, 'rgba(255,150,30,0)');
+    glow.addColorStop(0, 'rgba(255,230,120,0.85)');
+    glow.addColorStop(0.5, 'rgba(255,190,60,0.35)');
+    glow.addColorStop(1, 'rgba(255,160,40,0)');
     ctx.fillStyle = glow;
     ctx.fillRect(sunX - glowSize, sunY - glowSize, glowSize * 2, glowSize * 2);
 
     // 太阳本体
-    const sunSize = 40;
+    const sunSize = 44;
     if (state.images.sun && state.images.sun.complete) {
         ctx.drawImage(state.images.sun, sunX - sunSize / 2, sunY - sunSize / 2, sunSize, sunSize);
     } else {
@@ -477,41 +272,41 @@ function drawSun(hour) {
     }
 
     // 光线
-    ctx.strokeStyle = 'rgba(255,220,100,0.3)';
+    ctx.strokeStyle = 'rgba(255,230,120,0.25)';
     ctx.lineWidth = 2;
     for (let i = 0; i < 8; i++) {
         const angle = (Date.now() / 2000 + i * Math.PI / 4);
-        const rayLen = 60;
+        const rayLen = 65;
         ctx.beginPath();
-        ctx.moveTo(sunX + Math.cos(angle) * 22, sunY + Math.sin(angle) * 22);
+        ctx.moveTo(sunX + Math.cos(angle) * 24, sunY + Math.sin(angle) * 24);
         ctx.lineTo(sunX + Math.cos(angle) * rayLen, sunY + Math.sin(angle) * rayLen);
         ctx.stroke();
     }
+
+    return { x: sunX, y: sunY };
 }
 
 function drawMoon(hour) {
     const centerX = CONFIG.canvasWidth / 2;
-    const centerY = CONFIG.groundY + 100;
-    const radius = 350;
+    const centerY = CONFIG.skyCenterY;
+    const radius = CONFIG.skyRadius;
 
-    // 月亮位置：与太阳相对
     const moonHour = (hour + 12) % 24;
     const moonAz = (moonHour - 12) * 15;
     const moonAzRad = moonAz * Math.PI / 180;
 
     const moonX = centerX + Math.sin(moonAzRad) * radius;
-    const moonY = centerY - Math.cos(moonAzRad) * radius * 0.6;
+    const moonY = centerY - Math.cos(moonAzRad) * radius * 0.35;
 
-    if (moonY > CONFIG.groundY - 50) return; // 月亮在地平线以下
+    if (moonY > CONFIG.isoBaseY - 100) return;
 
-    const moonSize = 32;
+    const moonSize = 34;
 
-    // 月亮光晕
-    const glow = ctx.createRadialGradient(moonX, moonY, 5, moonX, moonY, 40);
-    glow.addColorStop(0, 'rgba(200,200,255,0.4)');
-    glow.addColorStop(1, 'rgba(200,200,255,0)');
+    const glow = ctx.createRadialGradient(moonX, moonY, 5, moonX, moonY, 42);
+    glow.addColorStop(0, 'rgba(220,220,255,0.45)');
+    glow.addColorStop(1, 'rgba(220,220,255,0)');
     ctx.fillStyle = glow;
-    ctx.fillRect(moonX - 40, moonY - 40, 80, 80);
+    ctx.fillRect(moonX - 42, moonY - 42, 84, 84);
 
     if (state.images.moon && state.images.moon.complete) {
         ctx.drawImage(state.images.moon, moonX - moonSize / 2, moonY - moonSize / 2, moonSize, moonSize);
@@ -520,7 +315,6 @@ function drawMoon(hour) {
         ctx.beginPath();
         ctx.arc(moonX, moonY, moonSize / 2, 0, Math.PI * 2);
         ctx.fill();
-        // 月坑
         ctx.fillStyle = '#BBBBBB';
         ctx.beginPath();
         ctx.arc(moonX - 4, moonY - 3, 4, 0, Math.PI * 2);
@@ -529,41 +323,412 @@ function drawMoon(hour) {
         ctx.arc(moonX + 5, moonY + 2, 3, 0, Math.PI * 2);
         ctx.fill();
     }
+
+    return { x: moonX, y: moonY };
 }
 
-function drawRuler() {
-    const startX = 80;
-    const endX = 880;
-    const y = CONFIG.groundY + 50;
+// --- 2.5D 等角方块绘制 ---
 
-    ctx.strokeStyle = 'rgba(244,209,66,0.5)';
+/**
+ * 绘制一个等角立方体（三个可见面）
+ * cx, cy: 顶面中心屏幕坐标
+ */
+function drawIsoCube(cx, cy, tileW, tileH, depth, colors) {
+    const halfW = tileW / 2;
+    const halfH = tileH;
+
+    // 顶面四个角
+    const topPt    = { x: cx,         y: cy - halfH };
+    const rightPt  = { x: cx + halfW, y: cy };
+    const bottomPt = { x: cx,         y: cy + halfH };
+    const leftPt   = { x: cx - halfW, y: cy };
+
+    // 底面四个角
+    const topDn    = { x: cx,         y: cy - halfH + depth };
+    const rightDn  = { x: cx + halfW, y: cy + depth };
+    const bottomDn = { x: cx,         y: cy + halfH + depth };
+    const leftDn   = { x: cx - halfW, y: cy + depth };
+
+    // 右侧面（东南侧，最暗）
+    ctx.fillStyle = colors.right;
+    ctx.beginPath();
+    ctx.moveTo(rightPt.x, rightPt.y);
+    ctx.lineTo(bottomPt.x, bottomPt.y);
+    ctx.lineTo(bottomDn.x, bottomDn.y);
+    ctx.lineTo(rightDn.x, rightDn.y);
+    ctx.closePath();
+    ctx.fill();
+
+    // 左侧面（西北侧，中等亮度）
+    ctx.fillStyle = colors.left;
+    ctx.beginPath();
+    ctx.moveTo(leftPt.x, leftPt.y);
+    ctx.lineTo(topPt.x, topPt.y);
+    ctx.lineTo(topDn.x, topDn.y);
+    ctx.lineTo(leftDn.x, leftDn.y);
+    ctx.closePath();
+    ctx.fill();
+
+    // 顶面（最亮）
+    ctx.fillStyle = colors.top;
+    ctx.beginPath();
+    ctx.moveTo(topPt.x, topPt.y);
+    ctx.lineTo(rightPt.x, rightPt.y);
+    ctx.lineTo(bottomPt.x, bottomPt.y);
+    ctx.lineTo(leftPt.x, leftPt.y);
+    ctx.closePath();
+    ctx.fill();
+
+    // 顶面纹理（如有）
+    if (colors.topPattern && state.images[colors.topPattern]) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(topPt.x, topPt.y);
+        ctx.lineTo(rightPt.x, rightPt.y);
+        ctx.lineTo(bottomPt.x, bottomPt.y);
+        ctx.lineTo(leftPt.x, leftPt.y);
+        ctx.closePath();
+        ctx.clip();
+        // 简单平铺纹理
+        const img = state.images[colors.topPattern];
+        const patW = tileW;
+        const patH = tileH * 2;
+        ctx.drawImage(img, cx - patW/2, cy - patH/2, patW, patH);
+        ctx.restore();
+    }
+
+    // 边框线（像素风描边）
+    ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(topPt.x, topPt.y);
+    ctx.lineTo(rightPt.x, rightPt.y);
+    ctx.lineTo(bottomPt.x, bottomPt.y);
+    ctx.lineTo(leftPt.x, leftPt.y);
+    ctx.closePath();
+    ctx.stroke();
+}
+
+// --- 地面网格 ---
+
+function drawIsoGroundTile(cx, cy, gridX, gridZ) {
+    const tw = CONFIG.isoTileW;
+    const th = CONFIG.isoTileH;
+    const depth = CONFIG.isoBlockDepth;
+    const halfW = tw / 2;
+
+    // 草地颜色（带轻微随机变化）
+    const seed = Math.abs(gridX * 7 + gridZ * 13) % 3;
+    const baseColors = [
+        { top: '#6CBD5C', left: '#52A048', right: '#3E8538' },
+        { top: '#64B454', left: '#4A9840', right: '#387D30' },
+        { top: '#5AAA50', left: '#44903C', right: '#327528' }
+    ];
+    const colors = baseColors[seed];
+
+    // 中心点
+    const topPt    = { x: cx,         y: cy - th };
+    const rightPt  = { x: cx + halfW, y: cy };
+    const bottomPt = { x: cx,         y: cy + th };
+    const leftPt   = { x: cx - halfW, y: cy };
+
+    const topDn    = { x: cx,         y: cy - th + depth };
+    const rightDn  = { x: cx + halfW, y: cy + depth };
+    const bottomDn = { x: cx,         y: cy + th + depth };
+    const leftDn   = { x: cx - halfW, y: cy + depth };
+
+    // 泥土层（向下延伸更多，模拟地面厚度）
+    const dirtDepth = depth * 2;
+    const rightDirt  = { x: cx + halfW, y: cy + dirtDepth };
+    const bottomDirt = { x: cx,         y: cy + th + dirtDepth };
+    const leftDirt   = { x: cx - halfW, y: cy + dirtDepth };
+
+    // 右侧面（泥土）
+    ctx.fillStyle = '#6B4E2A';
+    ctx.beginPath();
+    ctx.moveTo(rightPt.x, rightPt.y);
+    ctx.lineTo(bottomPt.x, bottomPt.y);
+    ctx.lineTo(bottomDirt.x, bottomDirt.y);
+    ctx.lineTo(rightDirt.x, rightDirt.y);
+    ctx.closePath();
+    ctx.fill();
+
+    // 左侧面（泥土）
+    ctx.fillStyle = '#5C4220';
+    ctx.beginPath();
+    ctx.moveTo(leftPt.x, leftPt.y);
+    ctx.lineTo(topPt.x, topPt.y);
+    ctx.lineTo(topDn.x, topDn.y);
+    ctx.lineTo(leftDn.x, leftDn.y);
+    ctx.closePath();
+    ctx.fill();
+
+    // 草地顶面
+    ctx.fillStyle = colors.top;
+    ctx.beginPath();
+    ctx.moveTo(topPt.x, topPt.y);
+    ctx.lineTo(rightPt.x, rightPt.y);
+    ctx.lineTo(bottomPt.x, bottomPt.y);
+    ctx.lineTo(leftPt.x, leftPt.y);
+    ctx.closePath();
+    ctx.fill();
+
+    // 草地侧面（草皮边缘）
+    ctx.fillStyle = colors.left;
+    ctx.beginPath();
+    ctx.moveTo(leftPt.x, leftPt.y);
+    ctx.lineTo(topPt.x, topPt.y);
+    ctx.lineTo(topDn.x, topDn.y);
+    ctx.lineTo(leftDn.x, leftDn.y);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = colors.right;
+    ctx.beginPath();
+    ctx.moveTo(rightPt.x, rightPt.y);
+    ctx.lineTo(bottomPt.x, bottomPt.y);
+    ctx.lineTo(bottomDn.x, bottomDn.y);
+    ctx.lineTo(rightDn.x, rightDn.y);
+    ctx.closePath();
+    ctx.fill();
+
+    // 顶面草纹理点缀（像素点）
+    ctx.fillStyle = 'rgba(100,200,80,0.3)';
+    const dotSeed = Math.abs(gridX * 31 + gridZ * 17) % 7;
+    for (let i = 0; i < 3 + dotSeed; i++) {
+        const dx = ((gridX * 11 + i * 37) % 20) - 10;
+        const dy = ((gridZ * 13 + i * 29) % 12) - 6;
+        ctx.fillRect(cx + dx, cy + dy, 2, 2);
+    }
+}
+
+// --- 标杆（方块堆叠） ---
+
+function drawIsoPole() {
+    const height = CONFIG.isoPoleHeight;
+    const tw = CONFIG.isoTileW * 0.35;  // 标杆较细
+    const th = CONFIG.isoTileH * 0.35;
+    const depth = CONFIG.isoBlockDepth * 0.35;
+
+    for (let layer = 0; layer < height; layer++) {
+        const worldY = layer + 1; // 标杆第layer层的顶面在worldY=layer+1
+        const pos = isoToScreen(0, worldY, 0);
+
+        // 红白条纹
+        const isRed = layer % 2 === 0;
+        const colors = isRed
+            ? { top: '#E84E4E', left: '#C43A3A', right: '#A02828' }
+            : { top: '#F0F0F0', left: '#D8D8D8', right: '#C0C0C0' };
+
+        drawIsoCube(pos.x, pos.y, tw, th, depth, colors);
+    }
+
+    // 标杆顶部小红帽
+    const topPos = isoToScreen(0, height + 0.3, 0);
+    const capColors = { top: '#FF3333', left: '#CC2222', right: '#AA1111' };
+    drawIsoCube(topPos.x, topPos.y, tw * 1.1, th * 1.1, depth * 0.6, capColors);
+}
+
+// --- 2.5D 影子 ---
+
+function drawIsoShadow() {
+    const seasonData = CONFIG.seasons[state.season];
+    const altitude = calcSunAltitude(state.hour, seasonData.noonAngle);
+    if (altitude <= 0.5) return;
+
+    const poleHeight = CONFIG.isoPoleHeight;
+    const rad = altitude * Math.PI / 180;
+    const shadowWorldLen = (poleHeight / Math.tan(rad)) * CONFIG.shadowScale;
+
+    const sunAz = calcSunAzimuth(state.hour);
+    const shadowAz = (sunAz + 180) % 360;
+    const shadowRad = shadowAz * Math.PI / 180;
+
+    // 影子终点世界坐标
+    const dx = Math.sin(shadowRad) * shadowWorldLen;
+    const dz = -Math.cos(shadowRad) * shadowWorldLen;
+
+    // 起点（标杆底部中心，略微浮起避免z-fighting）
+    const startW = { x: 0, y: 0.08, z: 0 };
+    const endW = { x: dx, y: 0.08, z: dz };
+
+    // 影子宽度
+    const halfWidth = 0.35;
+    const len = Math.sqrt(dx * dx + dz * dz);
+    let perpX = 0, perpZ = 0;
+    if (len > 0.01) {
+        perpX = -dz / len * halfWidth;
+        perpZ = dx / len * halfWidth;
+    }
+
+    // 四边形四个角（起点宽 → 末端窄）
+    const corners = [
+        { x: startW.x + perpX, y: 0.08, z: startW.z + perpZ, alpha: 0.38 },
+        { x: startW.x - perpX, y: 0.08, z: startW.z - perpZ, alpha: 0.38 },
+        { x: endW.x - perpX * 0.25, y: 0.08, z: endW.z - perpZ * 0.25, alpha: 0.15 },
+        { x: endW.x + perpX * 0.25, y: 0.08, z: endW.z + perpZ * 0.25, alpha: 0.15 }
+    ];
+
+    const screenCorners = corners.map(c => isoToScreen(c.x, c.y, c.z));
+
+    // 主体影子（带渐变透明度）
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.32)';
+    ctx.beginPath();
+    ctx.moveTo(screenCorners[0].x, screenCorners[0].y);
+    for (let i = 1; i < screenCorners.length; i++) {
+        ctx.lineTo(screenCorners[i].x, screenCorners[i].y);
+    }
+    ctx.closePath();
+    ctx.fill();
+
+    // 影子边缘虚线
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.12)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+
+    // 影子末端标记点
+    const endScreen = isoToScreen(endW.x, endW.y, endW.z);
+    ctx.fillStyle = 'rgba(244, 209, 66, 0.5)';
+    ctx.beginPath();
+    ctx.arc(endScreen.x, endScreen.y, 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    return { start: isoToScreen(startW.x, startW.y, startW.z), end: endScreen };
+}
+
+// --- 光线指示（太阳 → 标杆顶部） ---
+
+function drawLightRay(sunPos) {
+    if (!sunPos) return;
+    const seasonData = CONFIG.seasons[state.season];
+    const altitude = calcSunAltitude(state.hour, seasonData.noonAngle);
+    if (altitude <= 0) return;
+
+    // 标杆顶部等角坐标
+    const poleTop = isoToScreen(0, CONFIG.isoPoleHeight + 0.5, 0);
+
+    // 只画在场景区域内的部分
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255, 230, 100, 0.18)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 6]);
+    ctx.beginPath();
+    ctx.moveTo(sunPos.x, sunPos.y);
+    ctx.lineTo(poleTop.x, poleTop.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+}
+
+// --- 方向标签 ---
+
+function drawDirectionLabels() {
+    const labels = [
+        { text: '北', x: 0, z: -CONFIG.isoGridRadius - 0.8, color: '#ff6666' },
+        { text: '南', x: 0, z: CONFIG.isoGridRadius + 0.8, color: '#aaaaff' },
+        { text: '东', x: CONFIG.isoGridRadius + 0.8, z: 0, color: '#aaffaa' },
+        { text: '西', x: -CONFIG.isoGridRadius - 0.8, z: 0, color: '#ffffaa' }
+    ];
+
+    ctx.font = 'bold 14px "Noto Sans SC", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    labels.forEach(lbl => {
+        const pos = isoToScreen(lbl.x, 0, lbl.z);
+        // 文字阴影
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillText(lbl.text, pos.x + 1, pos.y + 1);
+        ctx.fillStyle = lbl.color;
+        ctx.fillText(lbl.text, pos.x, pos.y);
+    });
+}
+
+// --- 标尺（地面网格上的距离刻度） ---
+
+function drawGroundRuler() {
+    const z = CONFIG.isoGridRadius + 1.2;
+    const startX = -2;
+    const endX = 2;
+
+    const startPos = isoToScreen(startX, 0, z);
+    const endPos = isoToScreen(endX, 0, z);
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(244,209,66,0.4)';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(startX, y);
-    ctx.lineTo(endX, y);
+    ctx.moveTo(startPos.x, startPos.y);
+    ctx.lineTo(endPos.x, endPos.y);
     ctx.stroke();
 
-    ctx.fillStyle = 'rgba(244,209,66,0.7)';
-    ctx.font = 'bold 12px "Noto Sans SC", sans-serif';
+    ctx.fillStyle = 'rgba(244,209,66,0.6)';
+    ctx.font = 'bold 11px "Noto Sans SC", sans-serif';
     ctx.textAlign = 'center';
 
-    for (let m = 0; m <= 8; m++) {
-        const x = startX + (endX - startX) * m / 8;
-        ctx.fillRect(x - 1, y - 5, 2, 10);
-        ctx.fillText(m + 'm', x, y + 22);
+    for (let m = 0; m <= 4; m++) {
+        const t = m / 4;
+        const wx = startX + (endX - startX) * t;
+        const pos = isoToScreen(wx, 0, z);
+        ctx.fillRect(pos.x - 1, pos.y - 4, 2, 8);
+        ctx.fillText(m + 'm', pos.x, pos.y + 16);
     }
+    ctx.restore();
+}
+
+// --- 主场景渲染 ---
+
+function drawIsoScene() {
+    const radius = CONFIG.isoGridRadius;
+    const tiles = [];
+
+    // 收集所有地面格子
+    for (let z = -radius; z <= radius; z++) {
+        for (let x = -radius; x <= radius; x++) {
+            const pos = isoToScreen(x, 0, z);
+            tiles.push({ x, z, screenX: pos.x, screenY: pos.y });
+        }
+    }
+
+    // 按深度排序（从远到近）
+    tiles.sort((a, b) => (a.screenY + a.screenX * 0.5) - (b.screenY + b.screenX * 0.5));
+
+    // 绘制地面
+    tiles.forEach(tile => {
+        drawIsoGroundTile(tile.screenX, tile.screenY, tile.x, tile.z);
+    });
+
+    // 绘制影子（在地面上，标杆之前）
+    const shadowEnd = drawIsoShadow();
+
+    // 绘制标杆（方块堆叠）
+    drawIsoPole();
+
+    // 绘制标尺
+    drawGroundRuler();
+
+    // 方向标签
+    drawDirectionLabels();
 }
 
 function render() {
     ctx.clearRect(0, 0, CONFIG.canvasWidth, CONFIG.canvasHeight);
 
+    // 1. 天空背景
     drawSky(state.hour);
-    drawSun(state.hour);
-    drawGround();
-    drawShadow(state.hour);
-    drawHouse();
-    drawPole();
-    drawRuler();
+
+    // 2. 太阳/月亮（返回位置用于光线指示）
+    const sunPos = drawSun(state.hour);
+
+    // 3. 2.5D 等角场景
+    drawIsoScene();
+
+    // 4. 光线指示（在场景之上覆盖）
+    drawLightRay(sunPos);
 }
 
 // ===== UI 更新 =====
@@ -572,10 +737,9 @@ function updateDataPanel() {
     const seasonData = CONFIG.seasons[state.season];
     const altitude = calcSunAltitude(state.hour, seasonData.noonAngle);
     const azimuth = calcSunAzimuth(state.hour);
-    const shadowLen = altitude > 0 ? calcShadowLength(altitude, CONFIG.poleHeight) : null;
+    const shadowLen = altitude > 0 ? calcShadowLength(altitude, CONFIG.isoPoleHeight * 12) : null;
     const direction = calcShadowDirection(azimuth);
 
-    // 时间
     const h = Math.floor(state.hour);
     const m = Math.floor((state.hour - h) * 60);
     document.getElementById('timeDisplay').textContent = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
@@ -583,7 +747,6 @@ function updateDataPanel() {
     const phaseData = KNOWLEDGE_DB[h] || KNOWLEDGE_DB[0];
     document.getElementById('timePhase').textContent = phaseData.phase;
 
-    // 太阳高度角
     if (altitude > 0) {
         document.getElementById('angleDisplay').textContent = altitude.toFixed(1) + '°';
         if (altitude > 70) document.getElementById('angleDesc').textContent = '太阳接近天顶';
@@ -594,9 +757,8 @@ function updateDataPanel() {
         document.getElementById('angleDesc').textContent = '太阳在地平线以下';
     }
 
-    // 影子长度
     if (shadowLen !== null) {
-        const realLen = (shadowLen / 80).toFixed(2); // 转换为米
+        const realLen = (shadowLen / 80).toFixed(2);
         document.getElementById('shadowDisplay').textContent = realLen + 'm';
         if (shadowLen < 30) document.getElementById('shadowDesc').textContent = '影子很短';
         else if (shadowLen < 80) document.getElementById('shadowDesc').textContent = '影子中等';
@@ -606,7 +768,6 @@ function updateDataPanel() {
         document.getElementById('shadowDesc').textContent = '无阳光照射';
     }
 
-    // 影子方向
     if (direction !== null) {
         document.getElementById('directionDisplay').textContent = getDirectionText(direction);
         document.getElementById('directionDesc').textContent = `与太阳方向相反`;
@@ -625,12 +786,10 @@ function updateKnowledge() {
 }
 
 function updateTimelineUI() {
-    // 更新进度条
     const pct = (state.hour / 24) * 100;
     document.getElementById('timelineProgress').style.width = pct + '%';
     document.getElementById('timelineCurrent').style.left = pct + '%';
 
-    // 更新小时按钮
     document.querySelectorAll('.hour-btn').forEach(btn => {
         const h = parseInt(btn.dataset.hour);
         btn.classList.toggle('active', Math.floor(state.hour) === h);
@@ -646,7 +805,7 @@ function updateReportTable() {
         const seasonData = CONFIG.seasons[state.season];
         const alt = calcSunAltitude(h, seasonData.noonAngle);
         const az = calcSunAzimuth(h);
-        const len = alt > 0 ? calcShadowLength(alt, CONFIG.poleHeight) : null;
+        const len = alt > 0 ? calcShadowLength(alt, CONFIG.isoPoleHeight * 12) : null;
         const dir = calcShadowDirection(az);
 
         let sunPos = '';
@@ -689,7 +848,6 @@ function buildTimeline() {
         container.appendChild(btn);
     }
 
-    // 轨道标记
     const markers = document.getElementById('timelineMarkers');
     markers.innerHTML = '';
     for (let h = 0; h <= 24; h++) {
@@ -741,13 +899,10 @@ function animate() {
     const dt = (now - state.lastTimestamp) / 1000;
     state.lastTimestamp = now;
 
-    // 播放速度：正常1小时/秒，快进3小时/秒
     const speed = state.playSpeed === 2 ? 3 : 1;
     state.hour += dt * speed;
 
-    if (state.hour >= 24) {
-        state.hour = 0;
-    }
+    if (state.hour >= 24) state.hour = 0;
 
     render();
     updateDataPanel();
@@ -776,9 +931,7 @@ function toggleReport() {
     const wrapper = document.getElementById('reportWrapper');
     const isVisible = wrapper.style.display !== 'none';
     wrapper.style.display = isVisible ? 'none' : 'block';
-    if (!isVisible) {
-        updateReportTable();
-    }
+    if (!isVisible) updateReportTable();
 }
 
 // ===== 事件绑定 =====
@@ -794,7 +947,6 @@ function bindEvents() {
         btn.addEventListener('click', () => setSeason(btn.dataset.season));
     });
 
-    // 时间轴轨道点击跳转
     document.querySelector('.timeline-track').addEventListener('click', (e) => {
         const rect = e.currentTarget.getBoundingClientRect();
         const x = e.clientX - rect.left;
@@ -802,7 +954,6 @@ function bindEvents() {
         setHour(pct * 24);
     });
 
-    // 键盘控制
     document.addEventListener('keydown', (e) => {
         if (e.key === 'ArrowLeft') setHour(state.hour - 0.5);
         if (e.key === 'ArrowRight') setHour(state.hour + 0.5);
@@ -816,17 +967,19 @@ function bindEvents() {
 // ===== 初始化 =====
 
 async function init() {
+    // 调整Canvas尺寸
+    canvas.width = CONFIG.canvasWidth;
+    canvas.height = CONFIG.canvasHeight;
+
     buildTimeline();
     bindEvents();
     await preloadImages();
     setHour(12);
     updateReportTable();
 
-    // 窗口大小调整
     window.addEventListener('resize', () => {
         render();
     });
 }
 
-// 启动
 init();
