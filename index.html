@@ -5,30 +5,38 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Minecraft 太阳光与影子科学实验</title>
     <link rel="stylesheet" href="style.css">
+
+    <!-- Three.js Import Map -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
 </head>
 <body>
     <div class="app">
         <!-- 标题栏 -->
         <header class="mc-header">
             <div class="mc-title">
-                <img src="assets/sprites/sun.jpg" alt="sun" class="title-icon">
                 <h1>Minecraft 太阳光与影子科学实验</h1>
-                <img src="assets/sprites/moon.jpg" alt="moon" class="title-icon">
             </div>
-            <div class="mc-subtitle">探索一天中太阳位置与影子变化的规律</div>
+            <div class="mc-subtitle">旋转观察 | 拖动视角 | 缩放滚轮 | 探索一天中影子变化规律</div>
         </header>
 
         <!-- 主视口 -->
         <main class="mc-main">
             <div class="viewport-container">
-                <canvas id="sceneCanvas" width="960" height="600"></canvas>
+                <!-- Three.js 渲染目标 -->
+                <div id="threeContainer"></div>
                 <div class="compass-overlay">
-                    <img src="assets/ui/icons/compass.jpg" alt="compass" class="compass-img">
                     <div class="compass-labels">
-                        <span class="compass-n">北</span>
-                        <span class="compass-s">南</span>
-                        <span class="compass-e">东</span>
-                        <span class="compass-w">西</span>
+                        <span class="compass-n">N 北</span>
+                        <span class="compass-s">S 南</span>
+                        <span class="compass-e">E 东</span>
+                        <span class="compass-w">W 西</span>
                     </div>
                 </div>
             </div>
@@ -61,14 +69,14 @@
         <!-- 季节切换 -->
         <section class="season-bar">
             <span class="season-label">季节选择：</span>
-            <button class="season-btn" data-season="winter" id="btnWinter">
-                <img src="assets/ui/icons/winter.jpg" alt="winter"> 冬至
+            <button class="season-btn" data-season="winter">
+                <span class="season-emoji">❄️</span> 冬至
             </button>
-            <button class="season-btn active" data-season="equinox" id="btnEquinox">
-                <img src="assets/ui/icons/24h.jpg" alt="equinox"> 春分/秋分
+            <button class="season-btn active" data-season="equinox">
+                <span class="season-emoji">🍂</span> 春分/秋分
             </button>
-            <button class="season-btn" data-season="summer" id="btnSummer">
-                <img src="assets/ui/icons/summer.jpg" alt="summer"> 夏至
+            <button class="season-btn" data-season="summer">
+                <span class="season-emoji">☀️</span> 夏至
             </button>
         </section>
 
@@ -78,16 +86,16 @@
                 <span class="timeline-title">24小时时间轴</span>
                 <div class="timeline-controls">
                     <button class="ctrl-btn" id="btnPlay">
-                        <img src="assets/ui/icons/play.jpg" alt="play"> 播放
+                        ▶ 播放
                     </button>
                     <button class="ctrl-btn" id="btnPause" style="display:none;">
-                        <img src="assets/ui/icons/pause.jpg" alt="pause"> 暂停
+                        ⏸ 暂停
                     </button>
                     <button class="ctrl-btn" id="btnReset">
-                        <img src="assets/ui/icons/reset.jpg" alt="reset"> 重置
+                        ↺ 重置
                     </button>
                     <button class="ctrl-btn" id="btnFast">
-                        <img src="assets/ui/icons/fast-forward.jpg" alt="fast"> 快进
+                        ⏩ 快进
                     </button>
                 </div>
             </div>
@@ -103,11 +111,10 @@
         <section class="knowledge-section">
             <div class="knowledge-card" id="knowledgeCard">
                 <div class="knowledge-header">
-                    <img src="assets/ui/icons/compass.jpg" alt="tip" class="knowledge-icon">
                     <span class="knowledge-title">科学小知识</span>
                 </div>
                 <div class="knowledge-content" id="knowledgeContent">
-                    点击上方时间轴上的时间点，查看不同时间太阳与影子的变化规律。试着切换季节，观察冬至和夏至时影子长度的巨大差异！
+                    点击上方时间轴上的时间点，查看不同时间太阳与影子的变化规律。试着用鼠标拖动旋转视角，从不同角度观察影子方向！
                 </div>
             </div>
         </section>
@@ -134,37 +141,33 @@
 
         <!-- 原理图解 -->
         <section class="principle-section">
-            <h2 class="section-title">🌞 实验原理图解</h2>
+            <h2 class="section-title">实验原理图解</h2>
             <div class="principle-grid">
                 <div class="principle-card">
-                    <div class="principle-img">☀️ → 🏠 → ▓</div>
                     <h3>影子形成的条件</h3>
-                    <p>光源 + 遮挡物 + 屏（地面）。<strong>光沿直线传播</strong>，遇到不透明物体时，在背光面形成影子。</p>
+                    <p>光源 + 遮挡物 + 地面。<strong>光沿直线传播</strong>，遇到不透明物体时，在背光面形成影子。</p>
                 </div>
                 <div class="principle-card">
-                    <div class="principle-img">长 → 短 → 长</div>
                     <h3>一天中的变化</h3>
-                    <p>早晨影子<strong>长</strong>，正午影子<strong>最短</strong>，傍晚影子又变<strong>长</strong>。方向：西 → 北 → 东。</p>
+                    <p>早晨影子<strong>长</strong>，正午<strong>最短</strong>，傍晚又变<strong>长</strong>。<br>方向：西 → 北 → 东。</p>
                 </div>
                 <div class="principle-card">
-                    <div class="principle-img">冬(长) 夏(短)</div>
                     <h3>季节差异</h3>
-                    <p>冬至太阳高度角最小，影子<strong>最长</strong>；夏至太阳高度角最大，影子<strong>最短</strong>。古人用<strong>圭表</strong>测日影定节气。</p>
+                    <p>冬至影子<strong>最长</strong>，夏至<strong>最短</strong>。古人用<strong>圭表</strong>测日影定节气。</p>
                 </div>
                 <div class="principle-card">
-                    <div class="principle-img">θ ↑ = 影 ↓</div>
                     <h3>数学公式</h3>
-                    <p>影子长度 = 物体高度 ÷ tan(太阳高度角)。太阳高度角越大，tan值越大，影子越短。</p>
+                    <p>影长 = 物体高度 ÷ tan(θ)<br>太阳高度角θ越大，影越短。</p>
                 </div>
             </div>
         </section>
 
         <footer class="mc-footer">
             <p>Minecraft Style Sun & Shadow Science Experiment | STEM 教育演示</p>
-            <p>素材来源：Minecraft Education 风格资源包</p>
+            <p>Three.js 3D 引擎 | 实时阴影映射 | 自由旋转视角</p>
         </footer>
     </div>
 
-    <script src="script.js"></script>
+    <script type="module" src="script.js"></script>
 </body>
 </html>
