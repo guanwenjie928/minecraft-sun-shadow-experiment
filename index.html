@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft 太阳光与影子科学实验</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app">
+        <!-- 标题栏 -->
+        <header class="mc-header">
+            <div class="mc-title">
+                <img src="assets/sprites/sun.jpg" alt="sun" class="title-icon">
+                <h1>Minecraft 太阳光与影子科学实验</h1>
+                <img src="assets/sprites/moon.jpg" alt="moon" class="title-icon">
+            </div>
+            <div class="mc-subtitle">探索一天中太阳位置与影子变化的规律</div>
+        </header>
+
+        <!-- 主视口 -->
+        <main class="mc-main">
+            <div class="viewport-container">
+                <canvas id="sceneCanvas" width="960" height="540"></canvas>
+                <div class="compass-overlay">
+                    <img src="assets/ui/icons/compass.jpg" alt="compass" class="compass-img">
+                    <div class="compass-labels">
+                        <span class="compass-n">北</span>
+                        <span class="compass-s">南</span>
+                        <span class="compass-e">东</span>
+                        <span class="compass-w">西</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 数据面板 -->
+            <div class="data-panel">
+                <div class="data-card">
+                    <div class="data-label">当前时间</div>
+                    <div class="data-value" id="timeDisplay">12:00</div>
+                    <div class="data-desc" id="timePhase">正午</div>
+                </div>
+                <div class="data-card">
+                    <div class="data-label">太阳高度角</div>
+                    <div class="data-value" id="angleDisplay">--</div>
+                    <div class="data-desc" id="angleDesc">太阳在正南方最高点</div>
+                </div>
+                <div class="data-card">
+                    <div class="data-label">影子长度</div>
+                    <div class="data-value" id="shadowDisplay">--</div>
+                    <div class="data-desc" id="shadowDesc">影子最短</div>
+                </div>
+                <div class="data-card">
+                    <div class="data-label">影子方向</div>
+                    <div class="data-value" id="directionDisplay">--</div>
+                    <div class="data-desc" id="directionDesc">朝向正北</div>
+                </div>
+            </div>
+        </main>
+
+        <!-- 季节切换 -->
+        <section class="season-bar">
+            <span class="season-label">季节选择：</span>
+            <button class="season-btn" data-season="winter" id="btnWinter">
+                <img src="assets/ui/icons/winter.jpg" alt="winter"> 冬至
+            </button>
+            <button class="season-btn active" data-season="equinox" id="btnEquinox">
+                <img src="assets/ui/icons/24h.jpg" alt="equinox"> 春分/秋分
+            </button>
+            <button class="season-btn" data-season="summer" id="btnSummer">
+                <img src="assets/ui/icons/summer.jpg" alt="summer"> 夏至
+            </button>
+        </section>
+
+        <!-- 时间轴 -->
+        <section class="timeline-section">
+            <div class="timeline-header">
+                <span class="timeline-title">24小时时间轴</span>
+                <div class="timeline-controls">
+                    <button class="ctrl-btn" id="btnPlay">
+                        <img src="assets/ui/icons/play.jpg" alt="play"> 播放
+                    </button>
+                    <button class="ctrl-btn" id="btnPause" style="display:none;">
+                        <img src="assets/ui/icons/pause.jpg" alt="pause"> 暂停
+                    </button>
+                    <button class="ctrl-btn" id="btnReset">
+                        <img src="assets/ui/icons/reset.jpg" alt="reset"> 重置
+                    </button>
+                    <button class="ctrl-btn" id="btnFast">
+                        <img src="assets/ui/icons/fast-forward.jpg" alt="fast"> 快进
+                    </button>
+                </div>
+            </div>
+            <div class="timeline-track">
+                <div class="timeline-markers" id="timelineMarkers"></div>
+                <div class="timeline-progress" id="timelineProgress"></div>
+                <div class="timeline-current" id="timelineCurrent"></div>
+            </div>
+            <div class="timeline-hours" id="timelineHours"></div>
+        </section>
+
+        <!-- 知识面板 -->
+        <section class="knowledge-section">
+            <div class="knowledge-card" id="knowledgeCard">
+                <div class="knowledge-header">
+                    <img src="assets/ui/icons/compass.jpg" alt="tip" class="knowledge-icon">
+                    <span class="knowledge-title">科学小知识</span>
+                </div>
+                <div class="knowledge-content" id="knowledgeContent">
+                    点击上方时间轴上的时间点，查看不同时间太阳与影子的变化规律。试着切换季节，观察冬至和夏至时影子长度的巨大差异！
+                </div>
+            </div>
+        </section>
+
+        <!-- 实验报告 -->
+        <section class="report-section">
+            <button class="report-toggle" id="btnReport">📊 查看实验数据表</button>
+            <div class="report-table-wrapper" id="reportWrapper" style="display:none;">
+                <table class="report-table" id="reportTable">
+                    <thead>
+                        <tr>
+                            <th>时间</th>
+                            <th>太阳位置</th>
+                            <th>太阳高度角</th>
+                            <th>影子方向</th>
+                            <th>影子长度</th>
+                            <th>规律总结</th>
+                        </tr>
+                    </thead>
+                    <tbody id="reportBody"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- 原理图解 -->
+        <section class="principle-section">
+            <h2 class="section-title">🌞 实验原理图解</h2>
+            <div class="principle-grid">
+                <div class="principle-card">
+                    <div class="principle-img">☀️ → 🏠 → ▓</div>
+                    <h3>影子形成的条件</h3>
+                    <p>光源 + 遮挡物 + 屏（地面）。<strong>光沿直线传播</strong>，遇到不透明物体时，在背光面形成影子。</p>
+                </div>
+                <div class="principle-card">
+                    <div class="principle-img">长 → 短 → 长</div>
+                    <h3>一天中的变化</h3>
+                    <p>早晨影子<strong>长</strong>，正午影子<strong>最短</strong>，傍晚影子又变<strong>长</strong>。方向：西 → 北 → 东。</p>
+                </div>
+                <div class="principle-card">
+                    <div class="principle-img">冬(长) 夏(短)</div>
+                    <h3>季节差异</h3>
+                    <p>冬至太阳高度角最小，影子<strong>最长</strong>；夏至太阳高度角最大，影子<strong>最短</strong>。古人用<strong>圭表</strong>测日影定节气。</p>
+                </div>
+                <div class="principle-card">
+                    <div class="principle-img">θ ↑ = 影 ↓</div>
+                    <h3>数学公式</h3>
+                    <p>影子长度 = 物体高度 ÷ tan(太阳高度角)。太阳高度角越大，tan值越大，影子越短。</p>
+                </div>
+            </div>
+        </section>
+
+        <footer class="mc-footer">
+            <p>Minecraft Style Sun & Shadow Science Experiment | STEM 教育演示</p>
+            <p>素材来源：Minecraft Education 风格资源包</p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

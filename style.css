@@ -1,0 +1,622 @@
+/* ===== Minecraft 太阳光影实验 - 全局样式 ===== */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700;900&display=swap');
+
+:root {
+    --mc-dirt: #8B6914;
+    --mc-dirt-dark: #5C4510;
+    --mc-grass: #567D46;
+    --mc-stone: #7D7D7D;
+    --mc-wood: #A07850;
+    --mc-gold: #F4D142;
+    --mc-sky-day: #87CEEB;
+    --mc-sky-sunset: #FF8C42;
+    --mc-sky-night: #1a1a2e;
+    --mc-text: #3E2723;
+    --mc-text-light: #f5f5dc;
+    --mc-border: #3E2723;
+    --mc-shadow: rgba(0,0,0,0.4);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+    background: #1a1a2e url('assets/textures/dirt.jpg') repeat;
+    background-size: 128px;
+    color: var(--mc-text-light);
+    min-height: 100vh;
+    line-height: 1.6;
+}
+
+.app {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 16px;
+}
+
+/* ===== 标题栏 ===== */
+.mc-header {
+    text-align: center;
+    padding: 24px 16px;
+    background: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.3) 100%);
+    border: 4px solid var(--mc-stone);
+    border-radius: 4px;
+    margin-bottom: 16px;
+    position: relative;
+}
+
+.mc-header::before,
+.mc-header::after {
+    content: '';
+    position: absolute;
+    top: -8px;
+    width: 16px;
+    height: 16px;
+    background: var(--mc-gold);
+    border: 2px solid var(--mc-border);
+}
+
+.mc-header::before { left: -8px; }
+.mc-header::after { right: -8px; }
+
+.mc-title {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+}
+
+.mc-title h1 {
+    font-size: 1.8rem;
+    font-weight: 900;
+    color: var(--mc-gold);
+    text-shadow: 3px 3px 0px var(--mc-border), -1px -1px 0 var(--mc-border);
+    letter-spacing: 2px;
+}
+
+.title-icon {
+    width: 48px;
+    height: 48px;
+    image-rendering: pixelated;
+    border-radius: 4px;
+}
+
+.mc-subtitle {
+    margin-top: 8px;
+    font-size: 1rem;
+    color: #ddd;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+}
+
+/* ===== 主视口 ===== */
+.mc-main {
+    margin-bottom: 16px;
+}
+
+.viewport-container {
+    position: relative;
+    border: 6px solid var(--mc-stone);
+    border-radius: 4px;
+    overflow: hidden;
+    background: #000;
+    box-shadow: 0 8px 32px var(--mc-shadow);
+}
+
+#sceneCanvas {
+    display: block;
+    width: 100%;
+    height: auto;
+    image-rendering: pixelated;
+}
+
+.compass-overlay {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 80px;
+    height: 80px;
+}
+
+.compass-img {
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+}
+
+.compass-labels {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+}
+
+.compass-labels span {
+    position: absolute;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 1px 1px 2px #000;
+}
+
+.compass-n { top: 0; left: 50%; transform: translateX(-50%); color: #ff4444; }
+.compass-s { bottom: 0; left: 50%; transform: translateX(-50%); }
+.compass-e { right: 0; top: 50%; transform: translateY(-50%); }
+.compass-w { left: 0; top: 50%; transform: translateY(-50%); }
+
+/* ===== 数据面板 ===== */
+.data-panel {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.data-card {
+    background: linear-gradient(180deg, #4a4a4a 0%, #2a2a2a 100%);
+    border: 3px solid var(--mc-stone);
+    border-radius: 4px;
+    padding: 12px;
+    text-align: center;
+    transition: transform 0.2s, border-color 0.2s;
+}
+
+.data-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--mc-gold);
+}
+
+.data-label {
+    font-size: 0.8rem;
+    color: #aaa;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+}
+
+.data-value {
+    font-size: 1.6rem;
+    font-weight: 900;
+    color: var(--mc-gold);
+    text-shadow: 2px 2px 0 rgba(0,0,0,0.5);
+}
+
+.data-desc {
+    font-size: 0.75rem;
+    color: #ccc;
+    margin-top: 2px;
+}
+
+/* ===== 季节切换 ===== */
+.season-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 16px;
+    background: rgba(0,0,0,0.4);
+    border: 3px solid var(--mc-wood);
+    border-radius: 4px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.season-label {
+    font-weight: 700;
+    color: var(--mc-gold);
+    font-size: 1rem;
+}
+
+.season-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: linear-gradient(180deg, #7D7D7D 0%, #5a5a5a 100%);
+    border: 3px solid #555;
+    border-radius: 4px;
+    color: #fff;
+    font-family: inherit;
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-shadow: 1px 1px 0 rgba(0,0,0,0.5);
+}
+
+.season-btn img {
+    width: 24px;
+    height: 24px;
+    image-rendering: pixelated;
+    border-radius: 2px;
+}
+
+.season-btn:hover {
+    background: linear-gradient(180deg, #999 0%, #777 100%);
+    border-color: #777;
+    transform: translateY(-1px);
+}
+
+.season-btn.active {
+    background: linear-gradient(180deg, var(--mc-gold) 0%, #c9a000 100%);
+    border-color: #a08000;
+    color: var(--mc-text);
+    text-shadow: none;
+    box-shadow: 0 0 12px rgba(244, 209, 66, 0.4);
+}
+
+/* ===== 时间轴 ===== */
+.timeline-section {
+    background: rgba(0,0,0,0.5);
+    border: 3px solid var(--mc-stone);
+    border-radius: 4px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+.timeline-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.timeline-title {
+    font-weight: 900;
+    font-size: 1.1rem;
+    color: var(--mc-gold);
+    text-shadow: 1px 1px 0 rgba(0,0,0,0.5);
+}
+
+.timeline-controls {
+    display: flex;
+    gap: 8px;
+}
+
+.ctrl-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 12px;
+    background: linear-gradient(180deg, #6a6a6a 0%, #4a4a4a 100%);
+    border: 2px solid #555;
+    border-radius: 3px;
+    color: #fff;
+    font-family: inherit;
+    font-weight: 700;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.ctrl-btn img {
+    width: 20px;
+    height: 20px;
+    image-rendering: pixelated;
+}
+
+.ctrl-btn:hover {
+    background: linear-gradient(180deg, #888 0%, #666 100%);
+    border-color: #888;
+}
+
+.timeline-track {
+    position: relative;
+    height: 36px;
+    background: linear-gradient(180deg, #3a3a3a 0%, #2a2a2a 100%);
+    border: 2px solid #555;
+    border-radius: 3px;
+    margin-bottom: 8px;
+    overflow: hidden;
+}
+
+.timeline-markers {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+}
+
+.timeline-marker {
+    position: absolute;
+    top: 0;
+    width: 2px;
+    height: 100%;
+    background: rgba(255,255,255,0.15);
+}
+
+.timeline-marker.major {
+    background: rgba(255,255,255,0.3);
+    width: 2px;
+}
+
+.timeline-progress {
+    position: absolute;
+    top: 0; left: 0;
+    height: 100%;
+    background: linear-gradient(90deg, rgba(244,209,66,0.3) 0%, rgba(244,209,66,0.6) 100%);
+    transition: width 0.3s ease;
+    pointer-events: none;
+}
+
+.timeline-current {
+    position: absolute;
+    top: -4px;
+    width: 12px;
+    height: 44px;
+    background: var(--mc-gold);
+    border: 2px solid #fff;
+    border-radius: 2px;
+    transform: translateX(-50%);
+    transition: left 0.3s ease;
+    z-index: 10;
+    box-shadow: 0 0 8px rgba(244,209,66,0.6);
+}
+
+.timeline-hours {
+    display: flex;
+    justify-content: space-between;
+    padding: 0 2px;
+}
+
+.hour-btn {
+    flex: 1;
+    min-width: 32px;
+    padding: 8px 2px;
+    background: linear-gradient(180deg, #5a5a5a 0%, #3a3a3a 100%);
+    border: 2px solid #444;
+    border-radius: 3px;
+    color: #ccc;
+    font-family: inherit;
+    font-weight: 700;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    margin: 0 1px;
+    text-align: center;
+}
+
+.hour-btn:hover {
+    background: linear-gradient(180deg, #777 0%, #555 100%);
+    border-color: #888;
+    color: #fff;
+}
+
+.hour-btn.active {
+    background: linear-gradient(180deg, var(--mc-gold) 0%, #c9a000 100%);
+    border-color: #a08000;
+    color: var(--mc-text);
+    text-shadow: none;
+    box-shadow: 0 0 8px rgba(244,209,66,0.4);
+}
+
+.hour-btn.night {
+    background: linear-gradient(180deg, #2a2a4a 0%, #1a1a2e 100%);
+    border-color: #333;
+    color: #888;
+}
+
+.hour-btn.night:hover {
+    background: linear-gradient(180deg, #3a3a5a 0%, #2a2a3e 100%);
+    border-color: #555;
+    color: #aaa;
+}
+
+.hour-btn.night.active {
+    background: linear-gradient(180deg, #5555aa 0%, #333388 100%);
+    border-color: #7777cc;
+    color: #fff;
+    box-shadow: 0 0 8px rgba(100,100,255,0.4);
+}
+
+/* ===== 知识面板 ===== */
+.knowledge-section {
+    margin-bottom: 16px;
+}
+
+.knowledge-card {
+    background: linear-gradient(180deg, rgba(60,50,30,0.95) 0%, rgba(40,30,15,0.95) 100%);
+    border: 3px solid var(--mc-wood);
+    border-radius: 4px;
+    padding: 16px;
+    position: relative;
+}
+
+.knowledge-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid rgba(160,120,80,0.5);
+}
+
+.knowledge-icon {
+    width: 28px;
+    height: 28px;
+    image-rendering: pixelated;
+}
+
+.knowledge-title {
+    font-weight: 900;
+    font-size: 1rem;
+    color: var(--mc-gold);
+}
+
+.knowledge-content {
+    font-size: 0.95rem;
+    line-height: 1.7;
+    color: #eee;
+}
+
+.knowledge-content strong {
+    color: var(--mc-gold);
+}
+
+/* ===== 实验报告 ===== */
+.report-section {
+    margin-bottom: 16px;
+}
+
+.report-toggle {
+    display: block;
+    width: 100%;
+    padding: 12px;
+    background: linear-gradient(180deg, #567D46 0%, #3d5c32 100%);
+    border: 3px solid #456b38;
+    border-radius: 4px;
+    color: #fff;
+    font-family: inherit;
+    font-weight: 700;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-shadow: 1px 1px 0 rgba(0,0,0,0.3);
+}
+
+.report-toggle:hover {
+    background: linear-gradient(180deg, #6a9a56 0%, #507040 100%);
+}
+
+.report-table-wrapper {
+    margin-top: 12px;
+    overflow-x: auto;
+    border: 3px solid var(--mc-stone);
+    border-radius: 4px;
+    background: rgba(0,0,0,0.6);
+}
+
+.report-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.report-table th,
+.report-table td {
+    padding: 10px 8px;
+    text-align: center;
+    border: 1px solid #444;
+}
+
+.report-table th {
+    background: linear-gradient(180deg, #5a5a5a 0%, #3a3a3a 100%);
+    color: var(--mc-gold);
+    font-weight: 700;
+    position: sticky;
+    top: 0;
+}
+
+.report-table tr:nth-child(even) {
+    background: rgba(255,255,255,0.05);
+}
+
+.report-table tr:hover {
+    background: rgba(244,209,66,0.1);
+}
+
+/* ===== 原理图解 ===== */
+.principle-section {
+    margin-bottom: 16px;
+}
+
+.section-title {
+    text-align: center;
+    font-size: 1.3rem;
+    font-weight: 900;
+    color: var(--mc-gold);
+    margin-bottom: 16px;
+    text-shadow: 2px 2px 0 rgba(0,0,0,0.5);
+}
+
+.principle-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+}
+
+.principle-card {
+    background: linear-gradient(180deg, rgba(50,50,60,0.9) 0%, rgba(30,30,40,0.9) 100%);
+    border: 3px solid var(--mc-stone);
+    border-radius: 4px;
+    padding: 16px;
+    transition: transform 0.2s, border-color 0.2s;
+}
+
+.principle-card:hover {
+    transform: translateY(-3px);
+    border-color: var(--mc-gold);
+}
+
+.principle-img {
+    font-size: 1.5rem;
+    font-weight: 900;
+    text-align: center;
+    padding: 12px;
+    background: rgba(0,0,0,0.3);
+    border-radius: 4px;
+    margin-bottom: 10px;
+    color: var(--mc-gold);
+    letter-spacing: 2px;
+}
+
+.principle-card h3 {
+    font-size: 1rem;
+    color: var(--mc-gold);
+    margin-bottom: 6px;
+}
+
+.principle-card p {
+    font-size: 0.85rem;
+    color: #ccc;
+    line-height: 1.6;
+}
+
+.principle-card p strong {
+    color: #fff;
+}
+
+/* ===== 页脚 ===== */
+.mc-footer {
+    text-align: center;
+    padding: 20px;
+    background: rgba(0,0,0,0.4);
+    border: 2px solid var(--mc-stone);
+    border-radius: 4px;
+    color: #888;
+    font-size: 0.8rem;
+}
+
+.mc-footer p {
+    margin: 4px 0;
+}
+
+/* ===== 响应式 ===== */
+@media (max-width: 900px) {
+    .data-panel { grid-template-columns: repeat(2, 1fr); }
+    .principle-grid { grid-template-columns: 1fr; }
+    .mc-title h1 { font-size: 1.3rem; }
+    .title-icon { width: 36px; height: 36px; }
+}
+
+@media (max-width: 600px) {
+    .data-panel { grid-template-columns: 1fr; }
+    .season-bar { flex-direction: column; }
+    .timeline-header { flex-direction: column; align-items: flex-start; }
+    .hour-btn { font-size: 0.65rem; padding: 6px 1px; min-width: 24px; }
+    .compass-overlay { width: 60px; height: 60px; }
+}
+
+/* ===== 动画 ===== */
+@keyframes pulse {
+    0%, 100% { box-shadow: 0 0 8px rgba(244,209,66,0.4); }
+    50% { box-shadow: 0 0 16px rgba(244,209,66,0.7); }
+}
+
+.pulse {
+    animation: pulse 2s infinite;
+}
